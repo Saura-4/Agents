@@ -3,3 +3,7 @@ test.py
 __pycache__
 
 memory.json
+memory_embeddings.json
+memory_chroma.json
+
+chroma_db

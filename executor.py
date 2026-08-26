@@ -1,4 +1,4 @@
-from tools import calculator, save_notes, retrieve_notes, search, save_memory, retrieve_memories, retrieve_last_n_memories
+from tools import calculator, save_notes, retrieve_notes, search, save_memory, retrieve_memories, retrieve_last_n_memories, retrieve_memories_vector
 
 
 def execute_function(function_call):
@@ -27,6 +27,9 @@ def execute_function(function_call):
         elif name == "retrieve_last_n_memories":
             result = retrieve_last_n_memories(args["n"])
 
+        elif name == "retrieve_memories_vector":
+            result = retrieve_memories_vector(args["query"])
+            
         else:
             result = f"Unknown tool: {name}"
 

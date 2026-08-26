@@ -212,3 +212,50 @@ correct answer stated first):**
 
 **Next session scope:**
 - Implement vector-based memory retrieval over the persistent memory store, understand embedding-based similarity retrieval, and compare its behavior with lexical retrieval before implementing hybrid retrieval.
+
+
+## Session N: Implement Vector Memory Retrieval
+
+**Date:** 2026-08-26
+
+**Scope in:** Implemented vector-based long-term memory retrieval using Gemini embeddings, cosine similarity, top-k retrieval, and a configurable similarity threshold. Integrated vector retrieval into the existing agent tool-calling flow and tested it with 20 persistent memories.
+
+**Scope deferred:** Hybrid retrieval and hybrid + reranking were deferred to the next session so vector retrieval could be implemented and observed independently before adding another retrieval mechanism.
+
+**Concepts covered, with confirmed understanding (comprehension-checked, correct answer stated first):**
+- Vector retrieval embeds stored memories and the query into vectors, compares the query vector against memory vectors using cosine similarity, ranks memories by similarity, applies a threshold, and returns the top-k results.
+- Top-k and similarity threshold are separate controls: top-k limits the number of returned results, while the threshold excludes memories whose similarity score is below the configured minimum.
+- `top_k` and `threshold` are retrieval-system configuration rather than information Gemini needs to choose for the current learning experiment, so they were removed from the model-facing tool schema and kept inside the Python retrieval function.
+- The vector-memory system does not require a separate `save_memory_vector` model-facing tool because embedding a newly saved memory is an implementation detail of the memory system rather than a separate agent action.
+- A vector database is not inherently responsible for generating embeddings; embedding generation and vector storage/retrieval are separate responsibilities, although systems such as Chroma can integrate these responsibilities behind a simpler interface.
+- Vector retrieval can fail even when a relevant memory exists because the relevant memory may receive a similarity score below the configured threshold or may be ranked below other semantically related memories.
+- An empty retrieval result does not necessarily mean that no memory exists; it can also mean that no stored memory crossed the configured similarity threshold.
+- Vector retrieval can return semantically related but less useful memories because semantic similarity is not the same as task-specific relevance.
+
+**Concepts explained (not yet checked):**
+- The embedding model influences similarity scores, so a threshold such as `0.75` should not be treated as a universal measure of relevance.
+- Hybrid retrieval can combine lexical and semantic retrieval to compensate for weaknesses of either individual retrieval method.
+- Reranking can act as a second-stage relevance judgment over candidates retrieved by a broader first-stage retrieval system.
+- An agent may repeatedly call retrieval tools after receiving an empty result because the tool result does not currently communicate why retrieval returned nothing or what the agent should do next.
+
+**Initial misunderstandings (resolved — for pattern-tracking only):**
+- `top_k` and `threshold`: initially considered exposing both as Gemini tool parameters; corrected to keeping them as Python-side retrieval configuration because the current experiment is about understanding the retrieval mechanism rather than allowing the model to control retrieval configuration.
+- Vector-memory saving: initially considered whether a separate `save_memory_vector` tool was required; corrected to treating embedding/indexing as an internal implementation detail of memory storage.
+- Executor parameters: initially suspected that passing `args.get("top_k", 3)` and `args.get("threshold", 0.75)` caused the agent to stop after one iteration; verified that these defaults produce the same effective values as the function defaults and were not the fundamental cause of the earlier behavior.
+
+**Files touched:**
+- `tools.py` — added Gemini embedding generation, cosine similarity, persistent memory embeddings, vector retrieval, and the vector retrieval tool declaration.
+- `executor.py` — added execution handling for `retrieve_memories_vector` and simplified the call to pass only the model-provided query.
+
+**Other notes (environment/workflow facts, not project state):**
+- The vector embedding index was verified to contain 20 embeddings for 20 stored memories.
+- With threshold `0.0`, the query `"What am I building?"` returned three memories with similarity scores of approximately `0.679`, `0.661`, and `0.652`; the memory explicitly stating that a research agent was being built ranked second.
+- With threshold `0.75`, the same query returned no vector memories because the highest observed similarity was approximately `0.679`.
+- When vector retrieval returned an empty result, the agent sometimes repeatedly called retrieval-related tools until reaching the configured maximum number of agent steps.
+- A temporary debug check was added to verify the number of memories and embeddings and should be removed after verification.
+
+**Working-style event (only if it produced a standing preference):**
+- none
+
+**Next session scope:**
+- Implement hybrid memory retrieval by combining lexical retrieval with the existing vector retrieval, while keeping the two retrieval mechanisms understandable and independently observable before introducing reranking.

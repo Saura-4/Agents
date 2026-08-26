@@ -1,7 +1,8 @@
 from google.genai import types
 
-from clients import tavily_client
+from clients import tavily_client, client
 
+import math
 import os
 import json
 
@@ -173,7 +174,7 @@ def save_memory_with_metadata(memory: str, category: str):
         }
     )
 
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+    with open(MEMORY_FILE_WITH_METADATA, "w", encoding="utf-8") as f:
         json.dump(memories, f, indent=2)
 
     return "Memory saved successfully."
@@ -202,7 +203,7 @@ save_memory_with_metadata_tool = types.Tool(
 )
 
 def retrieve_memories_by_category(category: str):
-    memories = load_memories()
+    memories = load_memories_with_metadata()
 
     return [
         memory
@@ -220,7 +221,7 @@ retrieve_memory_with_metadata_tool = types.Tool(
                 type="OBJECT",
                 properties={
                     "category": types.Schema(
-                        types="STRING",
+                        type="STRING",
                         description="Category of the memory"
                     )
                 },
@@ -283,4 +284,231 @@ def retrieve_memories_by_keyword(keyword: str):
         if keyword in memory["memory"].lower()
     ]
 
-ALL_TOOLS = [calculator_tool, save_note_tool, search_tool, retrieve_notes_tool, save_memory_tool, retrieve_memories_tool,]
+
+
+
+EMBEDDING_MODEL = "gemini-embedding-001"
+MEMORY_EMBEDDINGS_FILE = "memory_embeddings.json"
+
+
+def embed_text(text: str, task_type: str):
+    response = client.models.embed_content(
+        model=EMBEDDING_MODEL,
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type=task_type
+        ),
+    )
+
+    return response.embeddings[0].values
+
+def cosine_similarity(vector_a, vector_b):
+    dot_product = sum(a * b for a, b in zip(vector_a, vector_b))
+
+    magnitude_a = math.sqrt(sum(a * a for a in vector_a))
+    magnitude_b = math.sqrt(sum(b * b for b in vector_b))
+
+    if magnitude_a == 0 or magnitude_b == 0:
+        return 0.0
+
+    return dot_product / (magnitude_a * magnitude_b)
+
+def load_memory_embeddings():
+    if not os.path.exists(MEMORY_EMBEDDINGS_FILE):
+        return {}
+
+    with open(MEMORY_EMBEDDINGS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_memory_embeddings(embeddings):
+    with open(MEMORY_EMBEDDINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(embeddings, f)
+
+def ensure_memory_embeddings():
+    memories = load_memories()
+    embeddings = load_memory_embeddings()
+
+    changed = False
+
+    for index, memory in enumerate(memories):
+
+        key = str(index)
+
+        if key not in embeddings:
+            embeddings[key] = embed_text(
+                memory,
+                "RETRIEVAL_DOCUMENT"
+            )
+            
+            changed = True
+
+    if changed:
+        save_memory_embeddings(embeddings)
+
+    return memories, embeddings
+
+
+def retrieve_memories_vector(
+    query: str,
+    top_k: int = 3,
+    threshold: float = 0.75,
+    ):
+    memories, embeddings = ensure_memory_embeddings()
+
+    if not memories:
+        return []
+
+    query_embedding = embed_text(
+        query,
+        "RETRIEVAL_QUERY"
+    )
+
+    scored_memories = []
+
+    for index, memory in enumerate(memories):
+
+        embedding = embeddings[str(index)]
+
+        score = cosine_similarity(
+            query_embedding,
+            embedding
+        )
+
+        scored_memories.append({
+            "memory": memory,
+            "similarity": score,
+        })
+
+    scored_memories.sort(
+        key=lambda item: item["similarity"],
+        reverse=True
+    )
+
+    results = [
+        item
+        for item in scored_memories
+        if item["similarity"] >= threshold
+    ]
+
+    return results[:top_k]
+
+
+retrieve_vector_memory_tool = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="retrieve_memories_vector",
+            description=(
+                "Retrieve long-term memories using semantic vector "
+                "similarity."
+            ),
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "query": types.Schema(
+                        type="STRING",
+                        description=(
+                            "The information to search for in long-term memory."
+                        ),
+                    )
+                },
+                required=["query"],
+            ),
+        )
+    ]
+)
+
+
+
+import chromadb
+
+chroma_client = chromadb.PersistentClient(
+    path="./chroma_db"
+)
+
+memory_collection = chroma_client.get_or_create_collection(
+    name="memories"
+)
+
+
+import chromadb
+
+MEMORY_CHROMA_FILE = "memory_chroma.json"
+
+chroma_client = chromadb.PersistentClient(
+    path="./chroma_memory"
+)
+
+chroma_collection = chroma_client.get_or_create_collection(
+    name="memory_chroma"
+)
+
+
+def load_chroma_memories():
+    with open(MEMORY_CHROMA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def ensure_chroma_memories():
+    memories = load_chroma_memories()
+
+    existing = chroma_collection.count()
+
+    if existing == len(memories):
+        return memories
+
+    for index, memory in enumerate(memories):
+
+        memory_id = str(index)
+
+        result = chroma_collection.get(
+            ids=[memory_id]
+        )
+
+        if not result["ids"]:
+            embedding = embed_text(
+                memory,
+                "RETRIEVAL_DOCUMENT"
+            )
+
+            chroma_collection.add(
+                ids=[memory_id],
+                documents=[memory],
+                embeddings=[embedding]
+            )
+
+    return memories
+
+
+def retrieve_memories_chroma(
+    query: str,
+    top_k: int = 3,
+):
+    ensure_chroma_memories()
+
+    query_embedding = embed_text(
+        query,
+        "RETRIEVAL_QUERY"
+    )
+
+    results = chroma_collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+    )
+
+    memories = results["documents"][0]
+    distances = results["distances"][0]
+
+    return [
+        {
+            "memory": memory,
+            "distance": distance,
+        }
+        for memory, distance in zip(memories, distances)
+    ]
+
+
+
+
+
+
+ALL_TOOLS = [calculator_tool, save_note_tool, retrieve_notes_tool, save_memory_tool, retrieve_vector_memory_tool,]

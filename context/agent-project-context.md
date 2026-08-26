@@ -117,16 +117,17 @@ Avoid unnecessary refactoring, abstraction, UI work, production optimization, or
 * Short-term memory can overlap heavily with conversation history, but memory and context are conceptually different: memory is retained information, while context is the subset currently supplied to a particular model call.
 * Long-term memory can be retrieved selectively and injected into context; not all persisted memory needs to be present in every model call.
 
-
 ---
 
 ## Current Agent
 
-The agent currently has three tools:
+The agent currently has tools for:
 
 * `calculator(expression)`
 * `search(query)` → Tavily
 * `save_notes(note)`
+* persistent memory writing and retrieval
+* vector-based memory retrieval
 
 Current architecture:
 
@@ -230,12 +231,11 @@ Understand:
 * How tools expose agent state to the model
 * What information should and should not be placed into model context
 
-
 ---
 
 ## 4. Memory
 
-**Status: foundational memory understood; retrieval is now being developed**
+**Status: foundational memory understood; vector retrieval implemented; hybrid retrieval is next**
 
 Understand the distinction between:
 
@@ -292,12 +292,12 @@ The initial implementation deliberately retrieves all stored memories.
 
 ### Memory retrieval progression
 
-The retrieval problem is now the next focus:
+The retrieval problem is being developed progressively:
 
 ```text
 All memories
     ↓
-recency / metadata / lexical baselines
+metadata / lexical baselines
     ↓
 vector retrieval
     ↓
@@ -310,13 +310,111 @@ Understand each retrieval mechanism independently before combining them.
 
 Current planned progression:
 
-1. Vector retrieval
-2. Hybrid retrieval
-3. Reranking
+1. Vector retrieval — implemented and verified
+2. Hybrid retrieval — next
+3. Reranking — after hybrid retrieval
 
 Query rewriting using an LLM may be investigated later as an optimization rather than assumed to be necessary.
 
 Do not introduce a production memory framework before the underlying retrieval mechanisms are understood manually.
+
+---
+
+## Vector Retrieval
+
+**Status: implemented and verified**
+
+Vector retrieval was implemented manually over the existing persistent memory store rather than introducing Chroma or another vector database.
+
+Current mechanism:
+
+```text
+Stored memory
+    ↓
+Gemini embedding model
+    ↓
+memory vector
+    ↓
+persistent embedding storage
+
+Query
+    ↓
+Gemini query embedding
+    ↓
+cosine similarity against memory vectors
+    ↓
+sort by similarity
+    ↓
+similarity threshold
+    ↓
+top-k
+    ↓
+retrieved memories
+```
+
+The implementation uses Gemini embeddings with retrieval-oriented task types:
+
+* `RETRIEVAL_DOCUMENT` for stored memories
+* `RETRIEVAL_QUERY` for user queries
+
+Memory embeddings are stored separately from `memory.json` in `memory_embeddings.json`.
+
+The current implementation uses explicit Python cosine-similarity calculation rather than delegating vector search to a vector database.
+
+### Vector retrieval design decisions
+
+* `top_k` and `threshold` are Python-side retrieval configuration rather than Gemini-controlled tool arguments.
+* The model-facing vector retrieval tool only needs the query.
+* A separate `save_memory_vector` model-facing tool is not required because embedding/indexing is an internal implementation detail of the memory system.
+* The memory store and vector representation are separate concerns.
+* Vector database systems such as Chroma can abstract storage, indexing, embedding integration, and similarity retrieval, but those responsibilities are being implemented explicitly first for learning.
+
+### Vector retrieval behavior observed
+
+With 20 memories and threshold `0.0`, the query:
+
+```text
+What am I building?
+```
+
+returned:
+
+```text
+0.679  I am learning agent architecture progressively rather than trying to build a production-ready agent immediately.
+0.661  I am building a research agent in Python using Gemini and Tavily.
+0.652  I am learning how AI agents work, especially tool calling, agent loops, state, context, and memory.
+```
+
+The explicitly relevant memory about building a research agent ranked second rather than first. This demonstrated that semantic similarity does not necessarily equal task-specific relevance.
+
+With a threshold of `0.75`, the same query returned no memories because the highest observed similarity was approximately `0.679`.
+
+This demonstrated that:
+
+* a relevant memory can exist but fail the similarity threshold
+* similarity scores should not be interpreted as universal relevance probabilities
+* a fixed threshold depends on the embedding model and retrieval data
+* vector retrieval can produce false negatives
+* vector retrieval can rank semantically related but less useful memories above the most directly useful memory
+
+### Vector retrieval failure observed
+
+When vector retrieval returned an empty list, the agent sometimes repeatedly called retrieval tools and eventually reached the configured `max_steps`.
+
+This demonstrated that:
+
+```text
+empty retrieval result
+```
+
+does not automatically tell the model whether:
+
+* no memory exists
+* memories exist but none crossed the threshold
+* retrieval failed
+* the threshold was too strict
+
+The current agent therefore has a separate reliability/control-flow issue around handling empty retrieval results. This is not being fixed yet because retrieval reliability is a later learning topic.
 
 ---
 
@@ -557,7 +655,7 @@ The agent has demonstrated:
 * explicit exposure of Python state through a retrieval tool
 * the distinction between state and model-visible context
 
-The foundational memory layer is now also implemented and verified.
+The foundational memory layer is implemented and verified.
 
 The agent can:
 
@@ -567,20 +665,24 @@ The agent can:
 * store memory with associated metadata as an experimental retrieval mechanism
 * retrieve memories by category as a metadata-based baseline
 
-The current learning focus is **memory retrieval**.
+Vector retrieval is now also implemented and verified manually using Gemini embeddings, persistent memory embeddings, cosine similarity, thresholding, and top-k ranking.
+
+The current learning focus is **progressively improving memory retrieval**.
 
 The next implementation sequence is:
 
 ```text
 Vector retrieval
       ↓
-Hybrid retrieval
+Hybrid retrieval        ← NEXT
       ↓
 Reranking
 ```
 
-Each mechanism should first be implemented and understood independently before combining them.
+Vector retrieval should now be treated as the completed first retrieval layer rather than the next task.
 
-The immediate next implementation should be vector-based retrieval over the existing persistent memory store.
+The immediate next implementation should be **hybrid retrieval**, combining lexical and semantic retrieval while keeping both mechanisms understandable and independently observable.
 
-Only after the foundational memory and memory-retrieval mechanisms are understood should the project move toward planning, reasoning patterns, reliability, evaluation, multi-agent systems, architecture trade-offs, and eventually LangGraph.
+After hybrid retrieval is understood, implement reranking as a second-stage retrieval mechanism.
+
+Only after the foundational memory and retrieval mechanisms are understood should the project move toward planning, reasoning patterns, reliability, evaluation, multi-agent systems, architecture trade-offs, and eventually LangGraph.
