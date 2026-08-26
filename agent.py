@@ -1,95 +1,49 @@
+"""The Gemini model loop and tool-call handling."""
+
 import json
 
 from google.genai import types
 
 from clients import client
-from executor import execute_function
-from tools import ALL_TOOLS
+from tool_definitions import ALL_TOOLS
+from tool_functions import execute_tool
 
-response_schema = types.Schema(
+RESPONSE_SCHEMA = types.Schema(
     type="OBJECT",
-    properties={
-        "answer": types.Schema(
-            type="STRING"
-        ),
-        "sources_used": types.Schema(
-            type="ARRAY",
-            items=types.Schema(type="INTEGER")
-        )
-    },
-    required=["answer", "sources_used"]
+    properties={"answer": types.Schema(type="STRING"), "sources_used": types.Schema(type="ARRAY", items=types.Schema(type="INTEGER"))},
+    required=["answer", "sources_used"],
 )
+SYSTEM_PROMPT = """You are a research assistant. Use search for current external facts.
+Use memory tools only when they are relevant or the user asks you to remember something.
+Never claim to have searched unless you used the search tool.
+Return JSON with answer and sources_used, where sources_used contains only search result IDs."""
 
 
-def run_agent(user_input, max_steps=5):
+def run_agent(user_input: str, max_steps: int = 5) -> str:
+    contents = [SYSTEM_PROMPT, user_input]
     search_results = []
-
-    system_prompt = """
-        You are a research assistant.
-
-        For questions requiring external information:
-        1. Search for relevant information.
-        2. Use the calculator when calculations are needed.
-        3. Save information to long-term memory when the user explicitly asks you to remember something.
-        4. Retrieve long-term memories when they may be relevant to the current request.
-        5. Never claim to have searched unless you actually used the search tool.
-        6. Use the search results to answer the question.
-        7. Return the final answer as JSON with:
-        - answer: the final answer
-        - sources_used: list of IDs of the search results used to support the answer.
-        8. Only use IDs that exist in the search results.
-        """
-
-    contents = [system_prompt, user_input]
-
-    for step in range(max_steps):
-
+    for _ in range(max_steps):
         response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                tools=ALL_TOOLS,
-                response_mime_type="application/json",
-                response_schema=response_schema,
-            )
+            model="gemini-3.5-flash-lite", contents=contents,
+            config=types.GenerateContentConfig(tools=ALL_TOOLS, response_mime_type="application/json", response_schema=RESPONSE_SCHEMA),
         )
-
         model_content = response.candidates[0].content
         contents.append(model_content)
-
-        # Gemini wants to call a tool
-        has_tool_call = False
-        for part in model_content.parts:
-            if part.function_call:
-                has_tool_call = True
-                function_call = part.function_call
-
-                result = execute_function(function_call)
-
-                if function_call.name == "search":
-                    search_results.extend(result)
-
-                tool_response = types.Part.from_function_response(
-                    name=function_call.name,
-                    response={"result": result},
-                )
-                contents.append(tool_response)
-
-        # Gemini has produced the final answer
-        if not has_tool_call:
-            data = json.loads(response.text)
-
-            answer = data["answer"]
-            sources = data["sources_used"]
-
-            if sources:
-                answer += "\n\n### Sources\n"
-
-                for source_id in sources:
-                    for result in search_results:
-                        if result["id"] == source_id:
-                            answer += f"- [{result['title']}]({result['url']})\n"
-
-            return answer
-
+        function_calls = [part.function_call for part in model_content.parts if part.function_call]
+        if not function_calls:
+            return _format_answer(response.text, search_results)
+        for function_call in function_calls:
+            result = execute_tool(function_call.name, dict(function_call.args or {}))
+            if function_call.name == "search" and isinstance(result, list):
+                search_results.extend(result)
+            contents.append(types.Part.from_function_response(name=function_call.name, response={"result": result}))
     return "Agent stopped: maximum steps reached."
+
+
+def _format_answer(response_text: str, search_results: list[dict]) -> str:
+    data = json.loads(response_text)
+    answer = data["answer"]
+    matched = [result for result in search_results if result["id"] in data.get("sources_used", [])]
+    if matched:
+        answer += "\n\n### Sources\n" + "".join(f"- [{result['title']}]({result['url']})\n" for result in matched)
+    return answer
