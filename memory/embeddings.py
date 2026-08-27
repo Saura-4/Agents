@@ -15,7 +15,7 @@ def _load_embeddings() -> dict[str, list[float]]:
 
 
 def _save_embeddings(embeddings: dict[str, list[float]]) -> None:
-    EMBEDDINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    EMBEDDINGS_FILE.parent.mkdir(parents=True, exist_ok=True) #
     with EMBEDDINGS_FILE.open("w", encoding="utf-8") as file:
         json.dump(embeddings, file)
 
@@ -24,7 +24,10 @@ def _embed(text: str, task_type: str) -> list[float]:
     from google.genai import types # type: ignore
     from clients import client
 
-    response = client.models.embed_content(model=EMBEDDING_MODEL, contents=text, config=types.EmbedContentConfig(task_type=task_type))
+    response = client.models.embed_content(
+        model=EMBEDDING_MODEL, 
+        contents=text, 
+        config=types.EmbedContentConfig(task_type=task_type))
     return list(response.embeddings[0].values)
 
 

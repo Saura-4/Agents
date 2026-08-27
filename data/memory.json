@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1545264f-636b-4842-b675-abfdb6db8d45",
+    "memory": "I am learning how AI agents work, especially tool calling, agent loops, state, context, and memory."
+  },
+  {
+    "id": "ae4f1d3d-59df-499c-931d-928d164d9cad",
+    "memory": "I am building a research agent in Python using Gemini and Tavily."
+  },
+  {
+    "id": "015cd63a-b198-4c76-8691-c1100336e832",
+    "memory": "I am learning RAG and want to understand retrieval mechanisms deeply rather than only using frameworks."
+  },
+  {
+    "id": "1629a051-a7ae-4158-9787-058b22085c90",
+    "memory": "I have previously implemented RAG using vector search and ChromaDB."
+  },
+  {
+    "id": "442244dc-d018-4040-8653-6f6da6622fb8",
+    "memory": "I am currently learning how long-term memory differs from conversation history and model context."
+  },
+  {
+    "id": "f89519b6-39fb-43e4-a468-2c6d8188b319",
+    "memory": "I prefer concise technical explanations with practical examples."
+  },
+  {
+    "id": "887ef775-dcca-403a-9f09-cb2616dabbb8",
+    "memory": "I am a student and I am focused on developing strong computer science fundamentals."
+  },
+  {
+    "id": "52a875f1-d5b3-4b12-b322-78e8796caa63",
+    "memory": "I am learning about embeddings and how text can be represented as vectors."
+  },
+  {
+    "id": "86bcda61-7d2e-4ee7-9367-fac14e7f1c94",
+    "memory": "I want to understand cosine similarity and how it is used to compare embeddings."
+  },
+  {
+    "id": "faf6365e-6df3-4084-8179-cc449dbe8f23",
+    "memory": "I am currently implementing vector-based retrieval for the memory system in my research agent."
+  },
+  {
+    "id": "10e7e1e4-350a-4e2a-9bc5-4946c6ee4591",
+    "memory": "After vector retrieval, I plan to learn hybrid retrieval that combines lexical and semantic search."
+  },
+  {
+    "id": "ac37864e-dd95-45e2-9944-2ec12b999a78",
+    "memory": "After understanding hybrid retrieval, I plan to learn reranking as a second-stage retrieval mechanism."
+  },
+  {
+    "id": "1abc55dd-423a-4cec-8577-4ab520c0d400",
+    "memory": "I want to understand the failure modes and trade-offs of different retrieval methods."
+  },
+  {
+    "id": "6fe9a077-6990-45cd-87e9-a77c85c02d46",
+    "memory": "I prefer implementing concepts manually before using frameworks that abstract away the underlying mechanisms."
+  },
+  {
+    "id": "92d64f1c-2d52-43f3-85df-3a46b755724b",
+    "memory": "Eventually I want to understand LangGraph as an abstraction over agent state, nodes, transitions, and control flow."
+  },
+  {
+    "id": "f21a123e-da16-4eec-81e2-279e865be415",
+    "memory": "I am learning agent architecture progressively rather than trying to build a production-ready agent immediately."
+  },
+  {
+    "id": "46c44af6-b782-4217-927e-d8ec23e60eab",
+    "memory": "I want to understand why an agent chooses a particular tool and how tool results influence later decisions."
+  },
+  {
+    "id": "98b2f1c9-a69c-442b-9beb-3a67c154bd3f",
+    "memory": "I am interested in understanding how memory retrieval decides which stored information should enter the model context."
+  },
+  {
+    "id": "6f532f6f-47ba-42c8-9cec-5e207697f2d0",
+    "memory": "I am currently using a persistent JSON file as the storage layer for long-term memory."
+  },
+  {
+    "id": "008c00d9-8788-4d70-8f45-e33825b7c7df",
+    "memory": "I want to compare naive retrieval, lexical retrieval, vector retrieval, hybrid retrieval, and reranking."
+  }
+]

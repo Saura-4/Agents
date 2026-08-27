@@ -7,7 +7,6 @@ from uuid import uuid4
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_DIR / "data"
 MEMORY_FILE = DATA_DIR / "memory.json"
-LEGACY_MEMORY_FILE = PROJECT_DIR / "memory.json"
 
 
 def _read_json(path: Path, default):
@@ -37,11 +36,7 @@ def _normalise_memories(raw_memories: list) -> list[dict]:
 
 
 def load_memories() -> list[dict]:
-    """Load memory records, migrating the original root-level file once."""
-    if not MEMORY_FILE.exists() and LEGACY_MEMORY_FILE.exists():
-        memories = _normalise_memories(_read_json(LEGACY_MEMORY_FILE, []))
-        _write_json(MEMORY_FILE, memories)
-        return memories
+    """Load memory records from the source-of-truth file."""
     raw_memories = _read_json(MEMORY_FILE, [])
     memories = _normalise_memories(raw_memories)
     if memories != raw_memories:

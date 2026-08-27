@@ -16,8 +16,15 @@ def _collection():
 
 def index_memory(memory: dict, embedding: list[float] | None = None) -> None:
     """Upsert one saved memory into Chroma using its stable storage ID."""
-    vector = embedding if embedding is not None else store_embedding(memory["id"], memory["memory"])
-    _collection().upsert(ids=[memory["id"]], documents=[memory["memory"]], embeddings=[vector])
+    vector = embedding if embedding is not None else store_embedding(
+        memory["id"], 
+        memory["memory"]
+        )
+    _collection().upsert(
+        ids=[memory["id"]], 
+        documents=[memory["memory"]], 
+        embeddings=[vector]
+        )
 
 
 def ensure_chroma_index() -> None:

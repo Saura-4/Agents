@@ -2,10 +2,10 @@
 test.py
 __pycache__
 
-memory.json
-memory_embeddings.json
-memory_chroma.json
+/memory.json
+/memory_embeddings.json
+/memory_chroma.json
 
-chroma_db
+/chroma_db
 
 activate_venv.txt
