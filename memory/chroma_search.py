@@ -24,7 +24,7 @@ def index_memory(memory: dict, embedding: list[float] | None = None) -> None:
         ids=[memory["id"]], 
         documents=[memory["memory"]], 
         embeddings=[vector]
-        )
+    )
 
 
 def ensure_chroma_index() -> None:

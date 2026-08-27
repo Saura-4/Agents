@@ -50,6 +50,14 @@ The research agent should only be modified when doing so helps demonstrate or in
 
 Avoid unnecessary refactoring, abstraction, UI work, production optimization, or feature expansion unless they directly contribute to understanding an agent concept.
 
+### Important pacing rule
+
+Do not spend excessive time implementing infrastructure after the underlying concept is already understood.
+
+Once a mechanism has been understood sufficiently, use the appropriate library when that is the practical implementation and move to the next agent concept.
+
+The project should not become primarily a retrieval-engineering project.
+
 ---
 
 ## Current Stack
@@ -58,6 +66,7 @@ Avoid unnecessary refactoring, abstraction, UI work, production optimization, or
 * Gemini API (`google-genai`)
 * Tavily for real web search
 * `python-dotenv`
+* `rank_bm25` for practical BM25 retrieval
 
 ---
 
@@ -128,6 +137,7 @@ The agent currently has tools for:
 * `save_notes(note)`
 * persistent memory writing and retrieval
 * vector-based memory retrieval
+* lexical/BM25 memory retrieval work
 
 Current architecture:
 
@@ -235,7 +245,7 @@ Understand:
 
 ## 4. Memory
 
-**Status: foundational memory understood; vector retrieval implemented; hybrid retrieval is next**
+**Status: foundational memory understood; vector retrieval implemented; BM25 understood; hybrid retrieval is next**
 
 Understand the distinction between:
 
@@ -308,15 +318,30 @@ reranking
 
 Understand each retrieval mechanism independently before combining them.
 
-Current planned progression:
+Current progression:
 
-1. Vector retrieval — implemented and verified
-2. Hybrid retrieval — next
-3. Reranking — after hybrid retrieval
+1. Vector retrieval — implemented and understood
+2. BM25 lexical retrieval — mechanism understood; practical library selected
+3. Hybrid retrieval — **next**
+4. Reranking — after hybrid retrieval
 
 Query rewriting using an LLM may be investigated later as an optimization rather than assumed to be necessary.
 
 Do not introduce a production memory framework before the underlying retrieval mechanisms are understood manually.
+
+### Memory implementation pacing decision
+
+The core retrieval concepts are now sufficiently understood that the project should not spend multiple additional sessions reproducing retrieval infrastructure.
+
+The goal of hybrid retrieval is to understand:
+
+* why lexical and semantic retrieval complement each other
+* how their result sets differ
+* why raw BM25 and vector scores should not simply be added
+* how ranking fusion works
+* how a hybrid retriever fits into the agent architecture
+
+The implementation should therefore be kept minimal and understandable.
 
 ---
 
@@ -418,7 +443,141 @@ The current agent therefore has a separate reliability/control-flow issue around
 
 ---
 
-## 5. Planning and Decomposition
+## BM25 / Lexical Retrieval
+
+**Status: core mechanism understood; library implementation selected; eager indexing architecture still to implement**
+
+BM25 was studied manually before moving to the library implementation.
+
+The following concepts are understood:
+
+* Tokenization converts text into terms used by lexical retrieval.
+* Term frequency measures how often a query term appears in one memory.
+* Document frequency measures how many distinct memories contain a term.
+* IDF gives greater weight to terms that occur in fewer documents.
+* BM25 applies TF saturation rather than treating repeated occurrences as linearly valuable.
+* BM25 incorporates document-length normalization.
+* A memory's BM25 score for a query is the sum of the contributions of the query's individual terms.
+* BM25 retrieval scores all candidate memories, ranks them, and returns the highest-scoring memories.
+
+The manual implementation established the conceptual mechanism without needing to become the permanent retrieval implementation.
+
+### Practical implementation
+
+`rank_bm25` is the selected library for the practical BM25 implementation.
+
+The intended flow is:
+
+```text
+Stored memories
+    ↓
+tokenized corpus
+    ↓
+BM25Okapi
+    ↓
+query tokens
+    ↓
+BM25 scores
+    ↓
+ranked memories
+```
+
+### Important architecture decision
+
+BM25 should **not** be lazily constructed inside every retrieval call.
+
+The intended architecture is eager indexing:
+
+```text
+save_memory()
+    ↓
+persist memory
+    ↓
+update embedding/vector representation
+    ↓
+update Chroma/vector index where applicable
+    ↓
+update BM25 index
+```
+
+Then retrieval uses the already-maintained indexes:
+
+```text
+query
+  ↓
+BM25 retrieval
+  +
+vector retrieval
+```
+
+However, the final hybrid score itself cannot be calculated when a memory is inserted because the hybrid score depends on the future query.
+
+The distinction is:
+
+```text
+Insertion time:
+    build/update retrieval indexes
+
+Query time:
+    calculate query-dependent retrieval scores
+    combine rankings
+    produce hybrid ranking
+```
+
+BM25 corpus statistics also depend on the collection as a whole, so adding a memory can change BM25 statistics such as document frequency and total document count. The index lifecycle therefore needs to be handled explicitly rather than rebuilding it invisibly on every query.
+
+---
+
+## 5. Hybrid Retrieval
+
+**Status: next implementation topic**
+
+Hybrid retrieval should combine:
+
+```text
+Lexical retrieval
+      +
+Semantic retrieval
+      ↓
+Hybrid ranking
+```
+
+The purpose is not simply to make retrieval "better", but to understand the complementary failure modes.
+
+Lexical retrieval is strong when exact terms matter:
+
+```text
+Tavily
+Chroma
+specific names
+identifiers
+technical terminology
+```
+
+Semantic retrieval is strong when the query and memory express similar meaning using different words.
+
+The first hybrid implementation should keep both result sets observable.
+
+Do not initially combine raw BM25 and vector similarity scores directly because the two scoring systems have different scales and meanings.
+
+The preferred initial fusion mechanism is rank-based fusion, such as Reciprocal Rank Fusion:
+
+```text
+RRF score = 1 / (k + rank)
+```
+
+The goal is to understand:
+
+* how each retriever produces its ranking
+* how a memory appearing in both rankings is rewarded
+* how a memory appearing only near the top of one ranking can still survive
+* why rank fusion is useful when score scales are incompatible
+
+The implementation should remain minimal.
+
+---
+
+## 6. Planning and Decomposition
 
 Investigate how an agent handles tasks that require multiple actions.
 
@@ -435,7 +594,7 @@ Implement small experiments rather than building a full planner.
 
 ---
 
-## 6. Observation → Action → Feedback
+## 7. Observation → Action → Feedback
 
 Study the agent as an interaction loop:
 
@@ -459,7 +618,7 @@ This should connect naturally to the ideas behind ReAct.
 
 ---
 
-## 7. ReAct and Reasoning Patterns
+## 8. ReAct and Reasoning Patterns
 
 Read relevant papers when the implementation provides enough context to understand them.
 
@@ -481,7 +640,7 @@ Use papers to deepen the implementation-based understanding rather than replacin
 
 ---
 
-## 8. Reliability and Failure Handling
+## 9. Reliability and Failure Handling
 
 Investigate how agents fail.
 
@@ -503,7 +662,7 @@ Study both failure prevention and recovery.
 
 ---
 
-## 9. Evaluation
+## 10. Evaluation
 
 Once the agent has enough behavior to evaluate, learn how to measure it.
 
@@ -523,7 +682,7 @@ Build small evaluations rather than immediately adopting a large evaluation fram
 
 ---
 
-## 10. Multi-Agent Patterns
+## 11. Multi-Agent Patterns
 
 Only after understanding single-agent architecture well.
 
@@ -542,7 +701,7 @@ Do not assume multi-agent automatically means better.
 
 ---
 
-## 11. Agent Architecture and Trade-offs
+## 12. Agent Architecture and Trade-offs
 
 Step back and compare different architectures.
 
@@ -561,7 +720,7 @@ The goal is to understand **why an architecture is chosen**, not just how to imp
 
 ---
 
-## 12. LangGraph
+## 13. LangGraph
 
 Only after the underlying mechanisms are understood.
 
@@ -597,11 +756,12 @@ For each new concept:
 1. Understand the intuition.
 2. Understand the underlying mechanism.
 3. Implement the smallest useful version manually.
-4. Run experiments.
+4. Run experiments where they provide learning value.
 5. Intentionally break it where useful.
 6. Debug and explain the behavior.
 7. Identify limitations and trade-offs.
-8. Only then move to the next concept.
+8. Use a library when the underlying mechanism is already understood and further manual reproduction would not add meaningful learning.
+9. Move to the next concept rather than over-polishing the current one.
 
 Prefer incremental changes to the existing project.
 
@@ -624,6 +784,7 @@ Do not prioritize:
 * adding many tools
 * making the research agent "smart"
 * building a feature-complete research assistant
+* spending multiple sessions reproducing standard retrieval algorithms after their mechanisms are understood
 
 These may become relevant later, but they are secondary to understanding the underlying concepts.
 
@@ -665,24 +826,56 @@ The agent can:
 * store memory with associated metadata as an experimental retrieval mechanism
 * retrieve memories by category as a metadata-based baseline
 
-Vector retrieval is now also implemented and verified manually using Gemini embeddings, persistent memory embeddings, cosine similarity, thresholding, and top-k ranking.
+Vector retrieval is implemented and verified manually using Gemini embeddings, persistent memory embeddings, cosine similarity, thresholding, and top-k ranking.
 
-The current learning focus is **progressively improving memory retrieval**.
+BM25 has been understood at the mechanism level, including TF, DF, IDF, length normalization, per-term scoring, full-query scoring, and ranking.
 
-The next implementation sequence is:
+The practical BM25 implementation will use `rank_bm25` rather than continuing to manually reproduce the algorithm.
+
+The current learning focus is **hybrid retrieval**, but memory retrieval should now be treated as a bounded learning topic rather than the central focus of the project.
+
+The immediate next implementation should be:
 
 ```text
-Vector retrieval
+Eager BM25 indexing
+      +
+Existing vector/Chroma retrieval
       ↓
-Hybrid retrieval        ← NEXT
+Minimal hybrid retrieval
       ↓
-Reranking
+Rank fusion / RRF
+      ↓
+Move on from memory
 ```
 
-Vector retrieval should now be treated as the completed first retrieval layer rather than the next task.
+The hybrid implementation should not introduce lazy index construction.
 
-The immediate next implementation should be **hybrid retrieval**, combining lexical and semantic retrieval while keeping both mechanisms understandable and independently observable.
+At memory insertion time, retrieval indexes should be updated eagerly. The query-dependent hybrid score must still be calculated at retrieval time because it depends on the query.
 
-After hybrid retrieval is understood, implement reranking as a second-stage retrieval mechanism.
+After the minimum viable hybrid retrieval mechanism is understood, move to reranking only if it provides a clear learning objective. Do not spend multiple additional sessions polishing retrieval infrastructure.
 
-Only after the foundational memory and retrieval mechanisms are understood should the project move toward planning, reasoning patterns, reliability, evaluation, multi-agent systems, architecture trade-offs, and eventually LangGraph.
+After the memory/retrieval layer is sufficiently understood, return to the broader agent roadmap:
+
+```text
+Hybrid retrieval
+      ↓
+Reranking
+      ↓
+Planning / decomposition
+      ↓
+Observation → action → feedback
+      ↓
+ReAct / reasoning patterns
+      ↓
+Reliability and failure handling
+      ↓
+Evaluation
+      ↓
+Multi-agent patterns
+      ↓
+Architecture trade-offs
+      ↓
+LangGraph
+```
+
+The project should prioritize **breadth across core agent concepts while maintaining sufficient depth to understand each mechanism**, rather than spending disproportionate time perfecting one subsystem.

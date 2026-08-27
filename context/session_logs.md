@@ -214,7 +214,7 @@ correct answer stated first):**
 - Implement vector-based memory retrieval over the persistent memory store, understand embedding-based similarity retrieval, and compare its behavior with lexical retrieval before implementing hybrid retrieval.
 
 
-## Session N: Implement Vector Memory Retrieval
+## Session 6: Implement Vector Memory Retrieval
 
 **Date:** 2026-08-26
 
@@ -259,3 +259,48 @@ correct answer stated first):**
 
 **Next session scope:**
 - Implement hybrid memory retrieval by combining lexical retrieval with the existing vector retrieval, while keeping the two retrieval mechanisms understandable and independently observable before introducing reranking.
+
+
+## Session 7: BM25 and Hybrid Retrieval Direction
+
+**Date:** 2026-08-28
+
+**Scope in:** Implemented and understood the core BM25 concepts before moving toward library-based implementation. Covered tokenization, document frequency, inverse document frequency, term frequency, document-length normalization, BM25 term scoring, full-query BM25 scoring, and ranking memories by BM25 score. Discussed moving from the manual BM25 implementation to the `rank_bm25` library. Discussed the architecture required for hybrid lexical + vector retrieval and the requirement for eager indexing rather than lazy loading.
+
+**Scope deferred:** Full production implementation of hybrid retrieval was deferred. Persistent BM25 index lifecycle, integration of BM25 with `save_memory()`, and rank-fusion implementation were intentionally held back because memory retrieval had already consumed substantial project time and further implementation would provide diminishing learning value at this stage.
+
+**Concepts covered, with confirmed understanding (comprehension-checked, correct answer stated first):**
+- Document frequency measures the number of distinct documents containing a term, not the total number of times the term occurs across the corpus.
+- Term frequency measures how many times a query term occurs inside one specific memory.
+- IDF gives higher importance to terms that occur in fewer documents and lower importance to terms that occur in many documents.
+- BM25 calculates a score for one memory by summing the contributions of individual query terms.
+- A query consists of multiple terms, while a BM25 term contribution operates on one term; the overall BM25 score sums those term contributions.
+- BM25 retrieval scores every memory for a query, sorts memories by descending score, and returns the top-k results.
+- Raw BM25 scores and vector similarity scores should not simply be added because they generally operate on different scales; rank-based fusion such as Reciprocal Rank Fusion is a suitable hybrid approach.
+- A hybrid score cannot be calculated when a memory is inserted because the score depends on the future query; memory insertion should eagerly update retrieval indexes, while query-dependent hybrid scoring happens during retrieval.
+
+**Concepts explained (not yet checked):**
+- BM25 TF saturation controlled by `k1`.
+- BM25 document-length normalization controlled by `b`.
+- The standard BM25 IDF smoothing terms using `0.5`.
+- Persistent BM25 index architecture and the effect of adding a new document on corpus-level BM25 statistics.
+- Reciprocal Rank Fusion as a possible method for combining BM25 and vector rankings.
+
+**Initial misunderstandings (resolved — for pattern-tracking only):**
+- Document frequency: initially counted every occurrence of a term across all memories; corrected to count each document at most once, using a `break` or membership check.
+- Query versus term: initially mixed query-level and term-level BM25 functions; corrected to treat the query as a collection of terms and calculate each term's contribution before summing them into the memory's total BM25 score.
+- BM25 insertion-time scoring: initially treated the hybrid score as something that could be calculated when saving a memory; corrected to distinguish eager index updates from query-dependent scoring.
+
+**Files touched:**
+- `memory/bm25_search.py` — BM25 library implementation was planned, but the persistent/eager index integration was deferred.
+- `memory/` BM25-related code — manual BM25 functions were developed conceptually as a learning/reference implementation.
+
+**Other notes (environment/workflow facts, not project state):**
+- The `rank_bm25` Python library was selected as the practical BM25 implementation instead of continuing to reproduce the algorithm manually.
+- The session intentionally stopped before full hybrid implementation to prevent spending disproportionate project time on memory retrieval.
+
+**Working-style event (only if it produced a standing preference):**
+- The session established that implementation depth should be limited when the user already understands the underlying concept; the project should prioritize progressing through the broader agent-learning roadmap. See `project_context.md` → "How I learn" as the source of truth.
+
+**Next session scope:**
+- Finish the minimum viable hybrid retrieval implementation using eager BM25 indexing plus the existing vector/Chroma retrieval, then move on from memory retrieval to the next major agent concept.

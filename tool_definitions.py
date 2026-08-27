@@ -19,7 +19,22 @@ def _tool(
             required=required or []),
     )])
 
-
+retrieve_bm25_memory_tool = _tool(
+    "retrieve_memories_bm25",
+    "Retrieve long-term memories using BM25 lexical search.",
+    {
+        "query":types.Schema(
+            type="STRING",
+            description="The information to search for in memory."
+        )
+    },
+    ["query"]
+    )
+HYBRID_MEMORY_TOOL = _tool(
+    "retrieve_memories_hybrid",
+    "Retrieve long-term memories using combined lexical BM25 and semantic vector search.",
+    {"query": types.Schema(type="STRING", description="Memory search query.")},
+    ["query"])
 SEARCH_TOOL = _tool(
     "search", 
     "Search the web for current information.", 
@@ -87,4 +102,4 @@ CHROMA_MEMORY_TOOL = _tool(
     }, 
     ["query"])
 
-ALL_TOOLS = [SEARCH_TOOL, SAVE_NOTE_TOOL, RETRIEVE_NOTES_TOOL, SAVE_MEMORY_TOOL, RETRIEVE_MEMORY_TOOL, VECTOR_MEMORY_TOOL, CHROMA_MEMORY_TOOL]
+ALL_TOOLS = [SEARCH_TOOL, SAVE_NOTE_TOOL, RETRIEVE_NOTES_TOOL, SAVE_MEMORY_TOOL, RETRIEVE_MEMORY_TOOL, VECTOR_MEMORY_TOOL, CHROMA_MEMORY_TOOL, retrieve_bm25_memory_tool, HYBRID_MEMORY_TOOL]

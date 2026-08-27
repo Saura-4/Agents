@@ -21,6 +21,8 @@ def save_memory(memory: str) -> dict:
     record = save_memory_record(memory)
     embedding = store_embedding(record["id"], record["memory"])
     index_memory(record, embedding)
+    from memory.bm25_index import update_bm25_index
+    update_bm25_index(record)
     return {"message": "Memory saved successfully.", "memory": record}
 
 
@@ -36,6 +38,8 @@ def execute_tool(name: str, arguments: dict | None = None):
         "retrieve_last_n_memories": lambda: _get_last_memories(arguments.get("n", 5)),
         "retrieve_memories_vector": lambda: _retrieve_vector(arguments["query"], arguments.get("top_k", 3)),
         "retrieve_memories_chroma": lambda: _retrieve_chroma(arguments["query"], arguments.get("top_k", 3)),
+        "retrieve_memories_bm25": lambda: _retrieve_bm25(arguments["query"], arguments.get("top_k", 3)),
+        "retrieve_memories_hybrid": lambda: _retrieve_hybrid(arguments["query"]),
     }
     handler = handlers.get(name)
     if handler is None:
@@ -69,3 +73,12 @@ def _retrieve_vector(query: str, top_k: int):
 def _retrieve_chroma(query: str, top_k: int):
     from memory.chroma_search import retrieve_memories_chroma
     return retrieve_memories_chroma(query, top_k)
+
+def _retrieve_bm25(query: str, top_k: int):
+    from memory.bm25 import retrieve_memories_bm25
+    return retrieve_memories_bm25(query, top_k)
+
+
+def _retrieve_hybrid(query: str):
+    from memory.hybrid_search import retrieve_memories_hybrid
+    return retrieve_memories_hybrid(query)
